@@ -12,6 +12,7 @@ from .settlement.closing import Closing
 from .settlement.demand import Demand
 from .interfaces.bundles import Bundles
 from .quality import Quality
+from .verification import Drivers, Plans, Verification
 from .values import object_fields, reject
 
 
@@ -39,6 +40,15 @@ class EnergyService:
             self.production,
             self.tariffs,
             self.emissions,
+        )
+        self.drivers = Drivers(self.store, self.catalog)
+        self.plans = Plans(self.store, self.catalog, self.drivers)
+        self.verification = Verification(
+            self.store,
+            self.catalog,
+            self.reconstruction,
+            self.drivers,
+            self.plans,
         )
 
     def actions(self):
@@ -172,6 +182,36 @@ class EnergyService:
                     "revision_summary",
                     "conservation",
                     "system",
+                ],
+            ),
+            (
+                "driver",
+                self.drivers,
+                [
+                    "define",
+                    "get",
+                    "list",
+                    "put",
+                    "correct",
+                    "history",
+                    "series",
+                    "coverage",
+                ],
+            ),
+            (
+                "plan",
+                self.plans,
+                ["define", "freeze", "get", "list"],
+            ),
+            (
+                "verification",
+                self.verification,
+                [
+                    "windows",
+                    "evaluate",
+                    "evaluations",
+                    "evaluation",
+                    "impact",
                 ],
             ),
             (

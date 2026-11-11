@@ -27,6 +27,17 @@ CREATE TABLE IF NOT EXISTS closures(id TEXT PRIMARY KEY,start INTEGER NOT NULL,e
  state TEXT NOT NULL,revision INTEGER NOT NULL,payload TEXT NOT NULL,digest TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS corrections(id TEXT PRIMARY KEY,closure TEXT NOT NULL,payload TEXT NOT NULL,
  digest TEXT NOT NULL,approved INTEGER NOT NULL,operator TEXT);
+CREATE TABLE IF NOT EXISTS drivers(id TEXT PRIMARY KEY,payload TEXT NOT NULL,digest TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS driver_entries(id TEXT PRIMARY KEY,driver TEXT NOT NULL,start INTEGER NOT NULL,
+ end INTEGER NOT NULL,revision INTEGER NOT NULL,payload TEXT NOT NULL,digest TEXT NOT NULL,
+ UNIQUE(driver,start));
+CREATE INDEX IF NOT EXISTS driver_entry_time ON driver_entries(driver,start,end);
+CREATE TABLE IF NOT EXISTS driver_history(id TEXT NOT NULL,revision INTEGER NOT NULL,payload TEXT NOT NULL,
+ digest TEXT NOT NULL,reason TEXT NOT NULL,PRIMARY KEY(id,revision));
+CREATE TABLE IF NOT EXISTS plans(id TEXT PRIMARY KEY,state TEXT NOT NULL,revision INTEGER NOT NULL,
+ payload TEXT NOT NULL,digest TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS evaluations(id TEXT PRIMARY KEY,plan TEXT NOT NULL,seq INTEGER NOT NULL,
+ payload TEXT NOT NULL,digest TEXT NOT NULL,previous TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS audit(seq INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,
  entity TEXT NOT NULL,payload TEXT NOT NULL,previous TEXT NOT NULL,digest TEXT NOT NULL);
 """
@@ -149,6 +160,10 @@ class Store:
             "factors",
             "closures",
             "corrections",
+            "drivers",
+            "driver_entries",
+            "plans",
+            "evaluations",
         }
         if table not in allowed:
             reject("input", "unknown payload collection")
@@ -174,19 +189,25 @@ class Store:
             "factors",
             "closures",
             "corrections",
+            "drivers",
+            "driver_entries",
+            "plans",
+            "evaluations",
         ]:
             rows = self.rows("SELECT id FROM " + table + " ORDER BY id")
             for row in rows:
                 self.payload(table, row["id"])
             counts[table] = len(rows)
-        for row in self.rows("SELECT * FROM reading_history"):
-            if fingerprint(parse_json(row["payload"])) != row["digest"]:
-                reject(
-                    "integrity",
-                    "reading history changed",
-                    id=row["id"],
-                    revision=row["revision"],
-                )
+        for history in ["reading_history", "driver_history"]:
+            for row in self.rows("SELECT * FROM " + history):
+                if fingerprint(parse_json(row["payload"])) != row["digest"]:
+                    reject(
+                        "integrity",
+                        "revision history changed",
+                        table=history,
+                        id=row["id"],
+                        revision=row["revision"],
+                    )
         return {"verified": True, "counts": counts, "audit": self.verify_audit()}
 
     def snapshot_signature(self):
